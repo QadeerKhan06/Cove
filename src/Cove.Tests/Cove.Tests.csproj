@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Cove.App\Cove.App.csproj" />
+    <ProjectReference Include="..\Cove.Core\Cove.Core.csproj" />
+    <ProjectReference Include="..\Cove.Files\Cove.Files.csproj" />
+    <ProjectReference Include="..\Cove.System\Cove.System.csproj" />
+    <ProjectReference Include="..\Cove.UI\Cove.UI.csproj" />
+    <ProjectReference Include="..\Cove.Voice\Cove.Voice.csproj" />
+  </ItemGroup>
+
+</Project>

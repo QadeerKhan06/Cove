@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Cove.Core\Cove.Core.csproj" />
+    <ProjectReference Include="..\Cove.UI\Cove.UI.csproj" />
+    <ProjectReference Include="..\Cove.Files\Cove.Files.csproj" />
+    <ProjectReference Include="..\Cove.System\Cove.System.csproj" />
+    <ProjectReference Include="..\Cove.Voice\Cove.Voice.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="H.NotifyIcon.Wpf" Version="2.4.1" />
+    <PackageReference Include="Serilog" Version="4.4.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+  </PropertyGroup>
+
+</Project>
