@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Core stays UI-free (CLAUDE.md 8.1); everything else can use WPF -->
+    <UseWPF Condition="'$(MSBuildProjectName)' != 'Cove.Core'">true</UseWPF>
+  </PropertyGroup>
+</Project>
