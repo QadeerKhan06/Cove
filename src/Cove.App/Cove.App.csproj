@@ -20,4 +20,8 @@
     <OutputType>WinExe</OutputType>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Resource Include="Assets\cove.ico" />
+  </ItemGroup>
+
 </Project>
