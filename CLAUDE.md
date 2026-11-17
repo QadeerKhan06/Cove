@@ -63,7 +63,7 @@ Design principles (these guide every decision you suggest):
 - **Modular.** Each module can be switched off without affecting the others.
 - **Private.** Everything runs locally. Nothing leaves the PC unless the user explicitly uploads it.
 
-Planning documents (spec, team plan, task cards) are kept by the team. If they have been exported into `docs/` (for example `docs/spec.md`, `docs/team-plan.md`, `docs/cards.md`), read the relevant part before planning. If a card is referenced and you can't find it, ask the human to paste it. Don't guess its contents.
+Planning documents (spec, team plan, task cards) are kept by the team. The spec and the cards are in the repo root as `Cove In Depth.pdf` and `Cove_Task_Cards.pdf`; if they have been exported into `docs/` (for example `docs/spec.md`, `docs/team-plan.md`, `docs/cards.md`), prefer those. Read the relevant part before planning. If a card is referenced and you can't find it, ask the human to paste it. Don't guess its contents.
 
 ---
 
@@ -310,7 +310,7 @@ At the start of every session, before any plan:
    - `git status` — note uncommitted changes. If there are changes you didn't make, mention them and don't touch them.
    - `git branch --show-current` — if on `main`, say so; work must happen on a feature branch (Section 13).
    - `git log --oneline -10` — recent context.
-4. **Read the card** (from `docs/cards.md` or the human's paste) and the files involved.
+4. **Read the card** (from `Cove_Task_Cards.pdf`, `docs/cards.md` if exported, or the human's paste) and the files involved.
 5. **Restate the task** in two or three sentences, including the card's done-when, and ask any clarifying questions.
 6. **Write the plan** (Section 3.3) and wait for approval.
 
@@ -389,7 +389,7 @@ If the actual layout differs, **the repo wins**: follow what exists, and mention
 
 - `Cove.App` references everything (it wires the app together).
 - Every module project (`Cove.UI`, `Cove.Files`, `Cove.System`, `Cove.Voice`) references **only** `Cove.Core` and, if it shows UI, `Cove.UI` (for the kit).
-- **No module references another module.** Modules talk only through the event bus (`IEventBus`), commands (`ICommand`), and contracts in `Cove.Core/Contracts`.
+- **No module references another module.** Modules talk only through the event bus (`IEventBus`), commands (`ICoveCommand`), and contracts in `Cove.Core/Contracts`.
 - `Cove.Core` references no other Cove project and no UI framework types except what's needed for dispatching to the UI thread (keep this minimal).
 - If you find yourself wanting module-to-module references, stop: it's an architecture decision for the human (Section 2.1).
 
@@ -410,72 +410,107 @@ Triggers (shortcuts, folder watcher, clipboard listener, media sessions,
       └──────────────────────────────── Action engine (IJobService: Convert, Compress, Upload, OCR)
 
  Command bar (typed)  ─┐
- Voice (spoken)       ─┴─► Command router ──► ICommand implementations in each module
+ Voice (spoken)       ─┴─► Command router ──► ICoveCommand implementations in each module
 ```
 
 - Modules never talk to the pill directly. They publish events or register panels/commands.
 - Jobs report progress through the bus, so a running job shows in Peek even after its panel closes.
 - **Voice reuses the command router.** A spoken command becomes the same text a typed command would be. Don't build a separate path for voice.
 
-### 9.2 Contracts (sketch)
+### 9.2 Contracts (summary)
 
-> **The real definitions in `Cove.Core/Contracts` are the source of truth.** This sketch is for orientation only. If the code differs, follow the code and tell the human the sketch is out of date.
+> **The real definitions in `Cove.Core/Contracts` are the source of truth.** This summary is for orientation only. If the code differs, follow the code and tell the human the summary is out of date.
 
 ```csharp
+// Status: K-06 types are DRAFT until K-08 (all three approve). Job/file types are from K-07.
+
+// ── Modules ─────────────────────────────────────────────
 public interface IModule
 {
-    string Id { get; }              // stable, e.g. "files", "media"
+    string Id { get; }                  // stable, lowercase: "files", "media", "timer"
     string DisplayName { get; }
-    void Enable();
-    void Disable();                 // must release resources (hooks, mic, watchers)
+    string Description { get; }         // one sentence on the Settings > Modules card
+    bool EnabledByDefault => true;
+    Type? SettingsType => null;         // its ISettingsStore class, for "Reset to defaults"
+    IReadOnlyList<IPanel> Panels => Array.Empty<IPanel>();
+    IReadOnlyList<ICoveCommand> Commands => Array.Empty<ICoveCommand>();
+    Task EnableAsync(CancellationToken cancellationToken);   // must not block
+    Task DisableAsync();                // release everything: subscriptions, hooks, watchers, mic
 }
 
+// ── Events ──────────────────────────────────────────────
 public sealed record CoveEvent(
-    string Type,                    // e.g. "song.changed", "job.completed", "file.arrived"
-    string Source,                  // module id
+    string Type,                        // "area.thing-happened", see CoveEventTypes / JobEventTypes
+    string Source,                      // IModule.Id
     AlertPriority Priority,
-    object? Data,
-    IReadOnlyList<CoveAction> Actions);   // up to two buttons
-
-public sealed record CoveAction(string Label, Action Invoke);
+    string? Message = null,             // Alert text; null = never an Alert
+    object? Data = null)                // read with GetData<T>()
+{
+    public IReadOnlyList<CoveAction> Actions { get; init; }   // up to two buttons
+    public DateTimeOffset Timestamp { get; init; }
+    public Guid Id { get; init; }
+}
+public sealed record CoveAction(string Label, Func<Task> InvokeAsync);   // runs on the UI thread
+public enum AlertPriority { FilesCopied = 10, MicMuteChanged = 20, SongChanged = 30,
+    AutoSortMoved = 40, ScreenshotSaved = 50, DownloadFinished = 60, DeviceChanged = 70,
+    LowBattery = 80, JobCompleted = 90, JobFailed = 100, TimerFinished = 110, MicInUse = 120 }
+// AlertPriorityExtensions.ShowsDuringQuietTime(): true for JobFailed and above
+// CoveEventTypes: shared names, e.g. "system.quiet-started", "media.song-changed"
+// JobEventTypes:  "job.progress", "job.completed", "job.failed", "job.cancelled"
 
 public interface IEventBus
 {
-    void Publish(CoveEvent evt);
-    IDisposable Subscribe(string type, Action<CoveEvent> handler);
+    void Publish(CoveEvent coveEvent);                                   // any thread, returns at once
+    IDisposable Subscribe(string eventType, Action<CoveEvent> handler);  // handlers run on the UI thread
+    IDisposable SubscribeAll(Action<CoveEvent> handler);                 // alert queue and logging only
 }
 
+// ── Panels ──────────────────────────────────────────────
 public interface IPanel
 {
+    string Id { get; }
     string Title { get; }
-    char MenuLetter { get; }        // e.g. 'D' for Files
-    object CreateView();            // a WPF view built with the UI kit
+    char MenuLetter { get; }            // e.g. 'D' for Files; unique
+    object CreateView();                // a WPF UIElement built from the UI kit
+    void OnOpened(object? parameter);
+    void OnClosed();
 }
-
-public interface ICommand          // name may differ to avoid clashing with System.Windows.Input.ICommand
+public interface IPanelHost             // implemented by the pill
 {
-    string Name { get; }            // "compress"
-    IReadOnlyList<string> Aliases { get; }   // "shrink"
-    Task RunAsync(string arguments, CancellationToken ct);
+    void OpenPanel(string panelId, object? parameter = null);
+    void ClosePanel();
 }
 
-public interface IJobService
+// ── Commands (command bar and voice) ────────────────────
+public interface ICoveCommand           // not ICommand: avoids WPF's System.Windows.Input.ICommand
 {
-    Guid Start(Job job);
-    void Cancel(Guid id);
-    // Progress, Completed, Failed are published on the event bus
+    string Name { get; }                // "compress"
+    IReadOnlyList<string> Aliases { get; }          // "shrink"
+    string Description { get; }
+    string ArgumentHint { get; }        // "<format>"
+    IReadOnlyList<string> SpokenArguments { get; }  // extra words for the voice grammar
+    Task<CommandResult> RunAsync(string arguments, CancellationToken cancellationToken);
 }
+public sealed record CommandResult(bool Succeeded, string? Message = null);   // .Ok(...), .Fail(...)
 
-public interface IFileSource
-{
-    IReadOnlyList<string> GetCurrentFiles();  // Explorer selection, else recently copied files, else empty
-}
-
+// ── Settings ────────────────────────────────────────────
 public interface ISettingsStore
 {
-    T Get<T>(string moduleId) where T : new();
-    void Save<T>(string moduleId, T value);
+    T Get<T>(string moduleId) where T : class, new();   // returns a copy
+    void Save<T>(string moduleId, T value) where T : class, new();
+    void Reset(string moduleId);
 }
+
+// ── Jobs and files (K-07) ───────────────────────────────
+public interface IJobService { Guid Start(Job job); void Cancel(Guid jobId); }   // two at a time
+public sealed record Job(JobKind Kind, IReadOnlyList<string> InputFiles,
+                         IReadOnlyDictionary<string, string> Options);
+public enum JobKind { Convert, Compress, Upload, CopyText }
+public sealed record JobProgress(Guid JobId, double Percent, string? Status);
+public sealed record JobResult(Guid JobId, bool Succeeded, IReadOnlyList<string> OutputPaths,
+                               Uri? Link, string? CopiedText, string? ErrorMessage);
+public interface IFileSource { IReadOnlyList<string> GetCurrentFiles(); }
+// Explorer selection, else files copied in the last 2 min, else empty
 ```
 
 ### 9.3 Alert priority (highest first)
@@ -554,7 +589,7 @@ Position: top-center of the main monitor, 8 px from the top edge, in logical (DP
 ### 10.5 Windows interop
 
 - Use CsWin32 for Win32 APIs (add names to `NativeMethods.txt`).
-- Dispose COM objects, NAudio devices, watchers, hooks, and recognizers in `Disable()` / `Dispose()`. Leaking a mic or hook is a bug.
+- Dispose COM objects, NAudio devices, watchers, hooks, and recognizers in `DisableAsync()` / `Dispose()`. Leaking a mic or hook is a bug.
 - Check return values and `GetLastError` where relevant; log failures.
 - Undocumented Windows interfaces (e.g. setting the default audio device) are **Class C**: ask before using one, timebox it, and keep a documented fallback.
 
@@ -677,14 +712,14 @@ Before committing, show the human: the list of staged files and the proposed mes
 Message format:
 
 ```
-[C-05] Pill window shell: no-activate, topmost, top-center
+[KAN-n / C-05] Pill window shell: no-activate, topmost, top-center
 
 - Borderless transparent window with no taskbar button
 - WS_EX_NOACTIVATE so alerts never steal focus
 - Positioned in logical pixels for DPI scaling
 ```
 
-- First line ≤ 72 characters, starts with the card ID in brackets.
+- First line ≤ 72 characters, starts with the card's board number and card ID in brackets, e.g. `[KAN-9 / K-07]`. If a card has no board number, use the card ID alone.
 - Body explains what and why, in bullets.
 - Don't add attribution or trailers unless the human asks; respect the team's choice on AI attribution.
 - Never commit generated build output, logs, secrets, local config, or large binaries (except as the team decided for `tools/`).
@@ -801,6 +836,7 @@ Never do any of these, even if asked. Explain why and, where it applies, tell th
 | Date | Change | Approved by |
 | --- | --- | --- |
 | 2026-11-10 | First version | `<fill in>` |
+| 2026-11-17 | Synced with the code and team practice: §9.2 contracts summary (K-06, K-07), `ICoveCommand`, `DisableAsync()`, planning-doc locations, `[KAN-n / card]` commit format | All three (K-06 PR) |
 
 ---
 
@@ -814,7 +850,7 @@ Never do any of these, even if asked. Explain why and, where it applies, tell th
 | **Menu / Cove key** | Ctrl+Alt+Space; shows letters to open panels and `/` for commands. |
 | **Panel** | A full module view (Files, Media, Timer, Shelf, Settings shortcut). Takes focus while open. |
 | **Command bar** | Typed commands in the Menu, e.g. `compress discord`. |
-| **Command router** | Turns command text into an `ICommand` call; used by both the command bar and voice. |
+| **Command router** | Turns command text into an `ICoveCommand` call; used by both the command bar and voice. |
 | **Job** | Background work (convert, compress, upload, OCR) run by `IJobService`. |
 | **Quiet time** | Fullscreen, presentation, or Do Not Disturb; most alerts are held. |
 | **Card** | A task on the team's kanban board, with an ID like `C-05`, `F-11`, `S-04`, `V-02`, `K-06`, `Q-03`. |
