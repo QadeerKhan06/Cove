@@ -1,0 +1,13 @@
+// Win32 functions and values CsWin32 generates for Cove.UI (see CLAUDE.md 7 and 10.5).
+// Pill window: styles that keep it out of the taskbar, out of Alt+Tab, and from taking focus.
+// Not the ...Ptr versions: CsWin32 can't generate those for an any-CPU project, and extended
+// styles are 32-bit flags, so the plain versions are correct on 64-bit Windows too.
+GetWindowLong
+SetWindowLong
+WINDOW_EX_STYLE
+// Pill window: finding the main monitor and placing the pill on it.
+MonitorFromPoint
+GetMonitorInfo
+GetDpiForMonitor
+SetWindowPos
+WM_DISPLAYCHANGE

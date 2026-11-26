@@ -3,21 +3,32 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:Cove.App"
              xmlns:tb="clr-namespace:H.NotifyIcon;assembly=H.NotifyIcon.Wpf"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              ShutdownMode="OnExplicitShutdown">
     <!-- No StartupUri: Cove starts as a tray icon only, with no window and no taskbar button.
          OnExplicitShutdown keeps Cove running when a window such as Settings closes; only Quit ends it. -->
     <Application.Resources>
-        <tb:TaskbarIcon x:Key="TrayIcon"
-                        IconSource="/Assets/cove.ico"
-                        ToolTipText="Cove">
-            <tb:TaskbarIcon.ContextMenu>
-                <ContextMenu>
-                    <!-- Greyed out until the Settings window exists (S-08). -->
-                    <MenuItem Header="_Settings" IsEnabled="False" />
-                    <Separator />
-                    <MenuItem Header="_Quit" Click="OnQuitClick" />
-                </ContextMenu>
-            </tb:TaskbarIcon.ContextMenu>
-        </tb:TaskbarIcon>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- WPF-UI's colours. OnStartup switches them to Windows' light or dark mode. Kept here at
+                     the top level, as in WPF-UI's docs, because WPF-UI swaps this dictionary on a theme change. -->
+                <ui:ThemesDictionary Theme="Light" />
+                <!-- Cove's UI kit: sizes and styles built on the colours above. -->
+                <ResourceDictionary Source="pack://application:,,,/Cove.UI;component/Kit/CoveTheme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <tb:TaskbarIcon x:Key="TrayIcon"
+                            IconSource="/Assets/cove.ico"
+                            ToolTipText="Cove">
+                <tb:TaskbarIcon.ContextMenu>
+                    <ContextMenu>
+                        <!-- Greyed out until the Settings window exists (S-08). -->
+                        <MenuItem Header="_Settings" IsEnabled="False" />
+                        <Separator />
+                        <MenuItem Header="_Quit" Click="OnQuitClick" />
+                    </ContextMenu>
+                </tb:TaskbarIcon.ContextMenu>
+            </tb:TaskbarIcon>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>
