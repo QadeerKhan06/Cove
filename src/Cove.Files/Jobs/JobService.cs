@@ -69,7 +69,7 @@ public sealed class JobService : IJobService
                 var progress = new JobProgressReporter(jobId, _bus, SourceId);
                 progress.Report(0);
                 JobOutput output = await runner.RunAsync(job, progress, cancellationToken);
-                PublishCompleted(jobId, output);
+                PublishCompleted(jobId, job, output);
             }
             finally
             {
@@ -93,7 +93,7 @@ public sealed class JobService : IJobService
         }
     }
 
-    private void PublishCompleted(Guid jobId, JobOutput output)
+    private void PublishCompleted(Guid jobId, Job job, JobOutput output)
     {
         var result = new JobResult(jobId, true, output.OutputPaths, output.Link, output.CopiedText, null);
         string message = output.OutputPaths.Count switch
@@ -102,8 +102,28 @@ public sealed class JobService : IJobService
             1 => $"Saved {Path.GetFileName(output.OutputPaths[0])}",
             var count => $"Saved {count} files",
         };
+
+        // Some files failed but the rest were saved: still a Completed job, but the user must hear about it.
+        // JobResult has no list of failed files (a contract change), so the message is the only place.
+        if (output.FailedFiles.Count > 0)
+        {
+            string failed = output.FailedFiles.Count == 1
+                ? Path.GetFileName(output.FailedFiles[0])
+                : $"{output.FailedFiles.Count} files";
+            message = $"{message}. Couldn't {Verb(job.Kind)} {failed}";
+        }
+
         _bus.Publish(new CoveEvent(JobEventTypes.Completed, SourceId, AlertPriority.JobCompleted, message, result));
     }
+
+    private static string Verb(JobKind kind) => kind switch
+    {
+        JobKind.Convert => "convert",
+        JobKind.Compress => "compress",
+        JobKind.Upload => "upload",
+        JobKind.CopyText => "read",
+        _ => "finish",
+    };
 
     private void PublishFailed(Guid jobId, Job job)
     {

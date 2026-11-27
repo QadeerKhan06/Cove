@@ -90,6 +90,23 @@ public sealed class JobServiceTests
         Assert.Single(bus.Events, e => e.Type == JobEventTypes.Failed);
     }
 
+    [Theory]
+    [InlineData(new[] { "b.heic" }, "Saved a.jpg. Couldn't convert b.heic")]
+    [InlineData(new[] { "b.heic", "c.heic" }, "Saved a.jpg. Couldn't convert 2 files")]
+    public async Task AJobWhereSomeFilesFailed_CompletesAndSaysWhich(string[] failed, string expectedMessage)
+    {
+        var bus = new RecordingEventBus();
+        var output = new JobOutput([@"C:\fake\a.jpg"]) { FailedFiles = failed.Select(f => @"C:\fake\" + f).ToList() };
+        var service = new JobService(bus, [new FixedOutputRunner(output)]);
+        Task ended = WaitForEndedJobsAsync(bus, 1);
+
+        service.Start(FakeJob(1));
+        await ended;
+
+        var completed = Assert.Single(bus.Events, e => e.Type == JobEventTypes.Completed);
+        Assert.Equal(expectedMessage, completed.Message);
+    }
+
     [Fact]
     public void CancellingAnUnknownJob_DoesNothing()
     {
@@ -140,5 +157,14 @@ public sealed class JobServiceTests
 
             await Task.Delay(10);
         }
+    }
+
+    // A Convert runner that finishes at once with the given output.
+    private sealed class FixedOutputRunner(JobOutput output) : IJobRunner
+    {
+        public JobKind Kind => JobKind.Convert;
+
+        public Task<JobOutput> RunAsync(Job job, IProgress<double> progress, CancellationToken cancellationToken) =>
+            Task.FromResult(output);
     }
 }
