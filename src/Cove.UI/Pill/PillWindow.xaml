@@ -1,0 +1,19 @@
+<Window x:Class="Cove.UI.Pill.PillWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:kit="clr-namespace:Cove.UI.Kit"
+        Title="Cove"
+        AutomationProperties.Name="Cove"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        SizeToContent="WidthAndHeight"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="False">
+  <!-- Placeholder content until the Peek, Alert, Menu and Panel cards fill the pill. -->
+  <kit:CapsuleBorder Style="{StaticResource PillSurfaceStyle}">
+    <TextBlock Style="{StaticResource PillTextStyle}" Text="Cove" />
+  </kit:CapsuleBorder>
+</Window>
