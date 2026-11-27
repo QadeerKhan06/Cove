@@ -8,12 +8,25 @@
         AllowsTransparency="True"
         Background="Transparent"
         ResizeMode="NoResize"
-        SizeToContent="WidthAndHeight"
+        Width="{StaticResource PillWindowWidth}"
+        Height="{StaticResource PillWindowHeight}"
+        UseLayoutRounding="True"
         Topmost="True"
         ShowInTaskbar="False"
         ShowActivated="False">
-  <!-- Placeholder content until the Peek, Alert, Menu and Panel cards fill the pill. -->
-  <kit:CapsuleBorder Style="{StaticResource PillSurfaceStyle}">
-    <TextBlock Style="{StaticResource PillTextStyle}" Text="Cove" />
-  </kit:CapsuleBorder>
+  <!-- The window is a fixed, fully see-through area big enough for the largest panel; only the
+       surface inside it is drawn. Windows passes clicks on fully transparent pixels through to the
+       app underneath, so keep everything outside the surface fully transparent (CLAUDE.md 9.5, 11.1). -->
+  <Grid Margin="{StaticResource PillTopGap}">
+    <!-- One surface for every state: it changes size and shape, and its content is swapped. -->
+    <kit:CapsuleBorder x:Name="Surface"
+                       Style="{StaticResource PillAlertSurfaceStyle}"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Top"
+                       ClipToBounds="True">
+      <kit:CapsuleBorder.RenderTransform>
+        <TranslateTransform x:Name="Slide" />
+      </kit:CapsuleBorder.RenderTransform>
+    </kit:CapsuleBorder>
+  </Grid>
 </Window>
