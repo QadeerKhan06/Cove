@@ -300,7 +300,7 @@ public sealed class PillControllerTests : IDisposable
     {
         var pill = NewController();
 
-        Assert.True(pill.ShowAlert("IMG_2041.heic downloaded"));
+        Assert.True(pill.ShowAlert(Alert("IMG_2041.heic downloaded")));
         Assert.Equal(PillState.Alert, pill.State);
 
         pill.HideAlert();
@@ -314,7 +314,7 @@ public sealed class PillControllerTests : IDisposable
         var pill = NewController(new FakePanel("files"));
         pill.OpenPanel("files");
 
-        Assert.False(pill.ShowAlert("Saved Essay.pdf"));
+        Assert.False(pill.ShowAlert(Alert("Saved Essay.pdf")));
         Assert.Equal(PillState.Panel, pill.State);
         Assert.DoesNotContain(_view.Calls, call => call.StartsWith("alert", StringComparison.Ordinal));
     }
@@ -323,7 +323,7 @@ public sealed class PillControllerTests : IDisposable
     public void OpeningAPanelOverAnAlert_ReplacesIt_AndRemembersTheAppUnderneath()
     {
         var pill = NewController(new FakePanel("files"));
-        pill.ShowAlert("IMG_2041.heic downloaded");
+        pill.ShowAlert(Alert("IMG_2041.heic downloaded"));
 
         pill.OpenPanel("files");
         pill.ClosePanel();
@@ -336,12 +336,44 @@ public sealed class PillControllerTests : IDisposable
     public void ClickOutside_WhileAnAlertShows_IsIgnored()
     {
         var pill = NewController();
-        pill.ShowAlert("Low Tide · Marlow Bay");
+        pill.ShowAlert(Alert("Low Tide · Marlow Bay"));
 
         _view.ClickOutside();
 
         Assert.Equal(PillState.Alert, pill.State);
     }
+
+    [Fact]
+    public void AlertButtonClick_IsPassedOnToTheAlertQueue()
+    {
+        var pill = NewController();
+        var convert = new CoveAction("Convert", () => Task.CompletedTask);
+        CoveAction? clicked = null;
+        pill.ActionClicked += (_, action) => clicked = action;
+        pill.ShowAlert(Alert("IMG_2041.heic downloaded") with { Actions = [convert] });
+
+        _view.ClickAlertButton(convert);
+
+        Assert.Same(convert, clicked);
+    }
+
+    [Fact]
+    public void AlertButtonClick_AfterAPanelReplacedTheAlert_IsIgnored()
+    {
+        var pill = NewController(new FakePanel("files"));
+        var convert = new CoveAction("Convert", () => Task.CompletedTask);
+        var clicks = 0;
+        pill.ActionClicked += (_, _) => clicks++;
+        pill.ShowAlert(Alert("IMG_2041.heic downloaded") with { Actions = [convert] });
+        pill.OpenPanel("files");
+
+        _view.ClickAlertButton(convert);
+
+        Assert.Equal(0, clicks);
+    }
+
+    private static CoveEvent Alert(string message) =>
+        new(CoveEventTypes.FileArrived, "test", AlertPriority.DownloadFinished, message);
 
     private PillController NewController(params IPanel[] panels) => new(_view, panels, _logger);
 
@@ -357,6 +389,8 @@ public sealed class PillControllerTests : IDisposable
 
         public event EventHandler? ClickedOutside;
 
+        public event EventHandler<CoveAction>? AlertActionClicked;
+
         public List<string> Calls { get; } = new();
 
         public bool AcceptsViews { get; set; } = true;
@@ -369,7 +403,7 @@ public sealed class PillControllerTests : IDisposable
             return _foreground;
         }
 
-        public void ShowAlert(string message) => Calls.Add($"alert {message}");
+        public void ShowAlert(CoveEvent alert) => Calls.Add($"alert {alert.Message}");
 
         public bool ShowPanel(string title, object view)
         {
@@ -393,6 +427,8 @@ public sealed class PillControllerTests : IDisposable
         }
 
         public void PressEscape() => EscapePressed?.Invoke(this, EventArgs.Empty);
+
+        public void ClickAlertButton(CoveAction action) => AlertActionClicked?.Invoke(this, action);
 
         // Like Windows, the clicked window has focus by the time the pill hears about it.
         public void ClickOutside(nint window = ExplorerWindow)

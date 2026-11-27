@@ -6,7 +6,10 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Shapes;
 using System.Windows.Threading;
+using Cove.Core.Contracts;
+using Cove.UI.Kit;
 using Serilog;
 using Windows.Win32;
 using Windows.Win32.Foundation;
@@ -49,9 +52,14 @@ public sealed partial class PillWindow : Window, IPillView
     private static readonly Duration GrowDuration = TimeSpan.FromMilliseconds(250);
     private static readonly Duration ShrinkDuration = TimeSpan.FromMilliseconds(167);
 
-    private readonly TextBlock _alertText;
     private readonly Style _alertSurfaceStyle;
     private readonly Style _panelSurfaceStyle;
+    private readonly Style _alertTextStyle;
+    private readonly Style _iconStyle;
+    private readonly Style _dotStyle;
+    private readonly Style _actionButtonStyle;
+    private readonly Thickness _contentPadding;
+    private readonly Thickness _contentPaddingWithAction;
 
     private nint _handle;
     private PillState _shownState = PillState.Hidden;
@@ -64,7 +72,12 @@ public sealed partial class PillWindow : Window, IPillView
         InitializeComponent();
         _alertSurfaceStyle = (Style)FindResource("PillAlertSurfaceStyle");
         _panelSurfaceStyle = (Style)FindResource("PillPanelSurfaceStyle");
-        _alertText = new TextBlock { Style = (Style)FindResource("PillTextStyle") };
+        _alertTextStyle = (Style)FindResource("PillAlertTextStyle");
+        _iconStyle = (Style)FindResource("PillIconStyle");
+        _dotStyle = (Style)FindResource("PillDotStyle");
+        _actionButtonStyle = (Style)FindResource("PillActionButtonStyle");
+        _contentPadding = (Thickness)FindResource("PillContentPadding");
+        _contentPaddingWithAction = (Thickness)FindResource("PillContentPaddingWithAction");
 
         // Starts slid up and see-through, ready to slide in the first time it's shown.
         Slide.Y = -SlideDistance;
@@ -85,13 +98,15 @@ public sealed partial class PillWindow : Window, IPillView
     public event EventHandler? ClickedOutside;
 
     /// <inheritdoc />
+    public event EventHandler<CoveAction>? AlertActionClicked;
+
+    /// <inheritdoc />
     public nint GetForegroundWindow() => (nint)PInvoke.GetForegroundWindow();
 
     /// <inheritdoc />
-    public void ShowAlert(string message)
+    public void ShowAlert(CoveEvent alert)
     {
-        _alertText.Text = message;
-        ShowState(PillState.Alert, _alertText, _alertSurfaceStyle);
+        ShowState(PillState.Alert, BuildAlert(alert), _alertSurfaceStyle);
         AutomationProperties.SetName(this, "Cove");
     }
 
@@ -204,6 +219,46 @@ public sealed partial class PillWindow : Window, IPillView
     // Starts from wherever the value is now, so an interrupted slide carries on smoothly.
     private static DoubleAnimation AnimateTo(double to, Duration duration, IEasingFunction easing) =>
         new(to, duration) { EasingFunction = easing };
+
+    // The design's alert (SPEC.md §7): icon · one line · at most one button.
+    private DockPanel BuildAlert(CoveEvent alert)
+    {
+        // The design allows one action per alert; the queue logs when an event carries more.
+        var action = alert.Actions.Count > 0 ? alert.Actions[0] : null;
+        var line = new DockPanel { Margin = action is null ? _contentPadding : _contentPaddingWithAction };
+
+        var icon = CreateIcon(AlertIcons.For(alert.Type));
+        DockPanel.SetDock(icon, Dock.Left);
+        line.Children.Add(icon);
+
+        if (action is not null)
+        {
+            var button = new Button { Content = action.Label, Style = _actionButtonStyle };
+            button.Click += (_, _) => AlertActionClicked?.Invoke(this, action);
+            DockPanel.SetDock(button, Dock.Right);
+            line.Children.Add(button);
+        }
+
+        // Last, so it gets the space left between the icon and the button.
+        line.Children.Add(new TextBlock { Text = alert.Message, Style = _alertTextStyle });
+        return line;
+    }
+
+    private FrameworkElement CreateIcon(AlertIcon icon)
+    {
+        if (icon.Glyph is null)
+        {
+            var dot = new Ellipse { Style = _dotStyle };
+            dot.SetResourceReference(Shape.FillProperty, icon.BrushKey);
+            return dot;
+        }
+
+        // Decorative: screen readers skip it, since the alert's line already says what happened.
+        // The colour is a theme reference, so it follows a light/dark switch while the alert is up.
+        var glyph = new DecorativeGlyph { Text = icon.Glyph, Style = _iconStyle };
+        glyph.SetResourceReference(TextBlock.ForegroundProperty, icon.BrushKey);
+        return glyph;
+    }
 
     // Shows the surface in a new state: slides in if the pill was hidden, otherwise changes size.
     private void ShowState(PillState state, UIElement content, Style surfaceStyle)

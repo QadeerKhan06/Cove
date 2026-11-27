@@ -1,11 +1,13 @@
 using Cove.Core.Contracts;
+using Cove.Core.Events;
 using Serilog;
 
 namespace Cove.UI.Pill;
 
 /// <summary>
 /// Decides what the pill shows (Hidden, Alert or Panel) and where keyboard focus goes. Modules open
-/// panels through <see cref="IPanelHost"/>; C-07's alert queue calls <see cref="ShowAlert"/>.
+/// panels through <see cref="IPanelHost"/>; the <see cref="AlertQueue"/> shows alerts through
+/// <see cref="IAlertDisplay"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -23,7 +25,7 @@ namespace Cove.UI.Pill;
 /// running (CLAUDE.md 10.3). Use this class on the UI thread only, like the window it drives.
 /// </para>
 /// </remarks>
-public sealed class PillController : IPanelHost
+public sealed class PillController : IPanelHost, IAlertDisplay
 {
     private readonly IPillView _view;
     private readonly ILogger? _logger;
@@ -48,10 +50,14 @@ public sealed class PillController : IPanelHost
         // Esc only reaches the pill when the panel didn't use it to step back.
         _view.EscapePressed += (_, _) => ClosePanel();
         _view.ClickedOutside += (_, _) => OnClickedOutside();
+        _view.AlertActionClicked += OnAlertActionClicked;
     }
 
     /// <summary>Raised after a panel closes, so alerts held while it was open can show (C-07).</summary>
     public event EventHandler? PanelClosed;
+
+    /// <inheritdoc />
+    public event EventHandler<CoveAction>? ActionClicked;
 
     /// <summary>What the pill is showing now.</summary>
     public PillState State { get; private set; } = PillState.Hidden;
@@ -110,21 +116,21 @@ public sealed class PillController : IPanelHost
     /// <inheritdoc />
     public void ClosePanel() => Close(returnFocus: true);
 
-    /// <summary>Shows a one-line alert without taking focus.</summary>
+    /// <summary>Shows an alert without taking focus, in place of any alert already showing.</summary>
     /// <returns>
     /// False while a panel is open: the alert isn't shown, and the alert queue holds it until
-    /// <see cref="PanelClosed"/> (C-07).
+    /// <see cref="PanelClosed"/>.
     /// </returns>
-    public bool ShowAlert(string message)
+    public bool ShowAlert(CoveEvent alert)
     {
-        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(alert);
         if (State == PillState.Panel)
         {
             return false;
         }
 
         State = PillState.Alert;
-        _view.ShowAlert(message);
+        _view.ShowAlert(alert);
         return true;
     }
 
@@ -191,6 +197,16 @@ public sealed class PillController : IPanelHost
             panel.Id,
             view?.GetType().Name ?? "null");
         return false;
+    }
+
+    // Passed on to the alert queue, which runs the action. A click that lands as the alert is
+    // replaced by a panel is ignored.
+    private void OnAlertActionClicked(object? sender, CoveAction action)
+    {
+        if (State == PillState.Alert)
+        {
+            ActionClicked?.Invoke(this, action);
+        }
     }
 
     private void OnClickedOutside()
