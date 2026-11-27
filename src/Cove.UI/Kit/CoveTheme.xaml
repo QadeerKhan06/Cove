@@ -8,20 +8,59 @@
                     xmlns:sys="clr-namespace:System;assembly=mscorlib"
                     xmlns:kit="clr-namespace:Cove.UI.Kit">
 
-  <!-- Pill sizes, in DPI-independent pixels. From CLAUDE.md 9.5 (Peek: 200 x 36). -->
+  <!-- Pill sizes in DPI-independent pixels, from the design handoff (SPEC.md §5, CLAUDE.md 9.5).
+       Peek and alerts fit their content; the widths given for them are what the design shows. -->
   <sys:Double x:Key="PillHeight">36</sys:Double>
-  <sys:Double x:Key="PillMinWidth">200</sys:Double>
+  <sys:Double x:Key="PeekWidth">196</sys:Double>
+  <sys:Double x:Key="AlertMaxWidth">360</sys:Double>
+  <sys:Double x:Key="MenuWidth">360</sys:Double>
+  <sys:Double x:Key="MenuHeight">64</sys:Double>
+  <sys:Double x:Key="FilesActionsWidth">300</sys:Double>
+  <sys:Double x:Key="FilesActionsHeight">64</sys:Double>
+  <sys:Double x:Key="ProgressWidth">280</sys:Double>
+  <sys:Double x:Key="ProgressHeight">44</sys:Double>
+  <sys:Double x:Key="PanelMinWidth">320</sys:Double>
+  <sys:Double x:Key="PanelMaxWidth">400</sys:Double>
+  <!-- At this height a panel's content area scrolls; its header and footer stay put. -->
+  <sys:Double x:Key="PanelMaxHeight">420</sys:Double>
+  <sys:Double x:Key="PanelCornerRadius">12</sys:Double>
+
   <Thickness x:Key="PillPadding">16,0</Thickness>
+  <Thickness x:Key="PanelPadding">12,4,12,12</Thickness>
   <Thickness x:Key="PillBorderThickness">1</Thickness>
 
-  <!-- The pill's surface: a capsule with the theme's raised-surface fill and a hairline edge. -->
+  <!-- The 8 px gap below the top edge is inside the pill window, so the pill can slide in from
+       the edge while the window itself sits at the very top of the screen. -->
+  <Thickness x:Key="PillTopGap">0,8,0,0</Thickness>
+
+  <!-- The pill window: a fixed, see-through area for the widest and tallest panel, plus room for
+       the surface's shadow (16 px each side, 24 px below; the shadow itself comes in C-08). -->
+  <sys:Double x:Key="PillWindowWidth">432</sys:Double>
+  <sys:Double x:Key="PillWindowHeight">452</sys:Double>
+
+  <!-- Every pill surface: the theme's raised-surface fill, a hairline edge, and the theme's text
+       colour for whatever is inside it. -->
   <Style x:Key="PillSurfaceStyle" TargetType="kit:CapsuleBorder">
     <Setter Property="Background" Value="{DynamicResource SolidBackgroundFillColorQuarternaryBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
     <Setter Property="BorderThickness" Value="{StaticResource PillBorderThickness}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+  </Style>
+
+  <!-- Alert: one line with fully round ends, as wide as its content. -->
+  <Style x:Key="PillAlertSurfaceStyle" TargetType="kit:CapsuleBorder" BasedOn="{StaticResource PillSurfaceStyle}">
     <Setter Property="Height" Value="{StaticResource PillHeight}" />
-    <Setter Property="MinWidth" Value="{StaticResource PillMinWidth}" />
+    <Setter Property="MaxWidth" Value="{StaticResource AlertMaxWidth}" />
     <Setter Property="Padding" Value="{StaticResource PillPadding}" />
+  </Style>
+
+  <!-- Panel: a rounded rectangle that fits its content within the design's limits. -->
+  <Style x:Key="PillPanelSurfaceStyle" TargetType="kit:CapsuleBorder" BasedOn="{StaticResource PillSurfaceStyle}">
+    <Setter Property="MinWidth" Value="{StaticResource PanelMinWidth}" />
+    <Setter Property="MaxWidth" Value="{StaticResource PanelMaxWidth}" />
+    <Setter Property="MaxHeight" Value="{StaticResource PanelMaxHeight}" />
+    <Setter Property="Padding" Value="{StaticResource PanelPadding}" />
+    <Setter Property="MaxCornerRadius" Value="{StaticResource PanelCornerRadius}" />
   </Style>
 
   <!-- Main text inside the pill. -->
@@ -29,6 +68,7 @@
     <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
     <Setter Property="HorizontalAlignment" Value="Center" />
     <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
   </Style>
 
 </ResourceDictionary>

@@ -1,10 +1,15 @@
 ﻿using System.IO;
 using System.Windows;
+using Cove.Core.Contracts;
 using Cove.UI.Pill;
 using H.NotifyIcon;
 using Microsoft.Win32;
 using Serilog;
 using Wpf.Ui.Appearance;
+#if DEBUG
+using System.Windows.Input;
+using Cove.UI.DevTools;
+#endif
 
 namespace Cove.App;
 
@@ -24,6 +29,10 @@ public partial class App : Application
     private SingleInstanceGuard? _singleInstance;
     private TaskbarIcon? _trayIcon;
     private PillWindow? _pill;
+    private PillController? _pillController;
+#if DEBUG
+    private DebugHotKey? _testPanelShortcut;
+#endif
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -59,8 +68,11 @@ public partial class App : Application
         // background on every theme change, which paints the pill's see-through corners. The pill is
         // never a main window; the next real window (such as Settings) becomes MainWindow instead.
         MainWindow = null;
+        _pillController = new PillController(_pill, CreatePanels());
 #if DEBUG
-        AddTestPillMenuItem();
+        AddTestAlertMenuItem();
+        _testPanelShortcut = new DebugHotKey(
+            ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift, Key.P, ToggleTestPanel);
 #endif
 
         // The guard raises this on a thread-pool thread, so hop to the UI thread before doing anything.
@@ -78,6 +90,12 @@ public partial class App : Application
         // A static event: unsubscribing lets the app be cleaned up properly.
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
 
+#if DEBUG
+        _testPanelShortcut?.Dispose();
+#endif
+
+        // Close an open panel first, so its module hears OnClosed.
+        _pillController?.ClosePanel();
         _pill?.Close();
 
         // Removes the icon now; otherwise a "ghost" icon stays in the tray until the mouse passes over it.
@@ -112,43 +130,68 @@ public partial class App : Application
         Dispatcher.InvokeAsync(() => ApplicationThemeManager.ApplySystemTheme());
     }
 
-#if DEBUG
-    // TODO(C-12): remove once Peek, Alerts and the Menu show the pill for real; until then this is
-    // the only way to see it. The delay leaves time to click into another app first, to check that
-    // the pill doesn't take focus when it appears (clicking the tray menu itself always does).
-    private static readonly TimeSpan TestPillDelay = TimeSpan.FromSeconds(3);
-
-    private void AddTestPillMenuItem()
+    // TODO(C-03): add the panels of every switched-on module once the module loader is wired in.
+    private IPanel[] CreatePanels()
     {
-        var item = new System.Windows.Controls.MenuItem { Header = "Show test pill in 3 s" };
-        item.Click += (_, _) => ToggleTestPill(item);
+#if DEBUG
+        return [new TestPanel(close: () => _pillController?.ClosePanel())];
+#else
+        return [];
+#endif
+    }
+
+#if DEBUG
+    // TODO(C-12): remove the test alert and the test panel once real alerts and the Menu show the
+    // pill. The delay leaves time to click into another app first, to check that the alert doesn't
+    // take focus when it appears (clicking the tray menu itself always does).
+    private static readonly TimeSpan TestAlertDelay = TimeSpan.FromSeconds(3);
+
+    // The design's alert time (SPEC.md §5); C-07 brings the real countdown.
+    private static readonly TimeSpan TestAlertDuration = TimeSpan.FromSeconds(4);
+
+    private void AddTestAlertMenuItem()
+    {
+        var item = new System.Windows.Controls.MenuItem { Header = "Show test alert in 3 s" };
+        item.Click += (_, _) => RunAfter(TestAlertDelay, ShowTestAlert);
         _trayIcon?.ContextMenu?.Items.Insert(0, item);
         _trayIcon?.ContextMenu?.Items.Insert(1, new System.Windows.Controls.Separator());
     }
 
-    private void ToggleTestPill(System.Windows.Controls.MenuItem item)
+    private void ShowTestAlert()
     {
-        var pill = _pill;
-        if (pill is null)
+        if (_pillController?.ShowAlert("IMG_2041.heic downloaded") == true)
+        {
+            RunAfter(TestAlertDuration, () => _pillController.HideAlert());
+        }
+    }
+
+    // Ctrl+Alt+Shift+P: opens the test panel, or closes it if it's open.
+    private void ToggleTestPanel()
+    {
+        if (_pillController is null)
         {
             return;
         }
 
-        if (pill.IsVisible)
+        if (_pillController.State == PillState.Panel)
         {
-            pill.Hide();
-            item.Header = "Show test pill in 3 s";
-            return;
+            _pillController.ClosePanel();
         }
+        else
+        {
+            _pillController.OpenPanel(TestPanel.PanelId);
+        }
+    }
 
-        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TestPillDelay };
+    private static void RunAfter(TimeSpan delay, Action action)
+    {
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = delay };
         timer.Tick += (_, _) =>
         {
             timer.Stop();
-            pill.Show();
+            action();
         };
         timer.Start();
-        item.Header = "Hide test pill";
     }
 #endif
 

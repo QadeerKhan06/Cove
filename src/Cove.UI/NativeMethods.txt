@@ -11,3 +11,11 @@ GetMonitorInfo
 GetDpiForMonitor
 SetWindowPos
 WM_DISPLAYCHANGE
+// Pill panels: remembering which window had focus, and giving it back when the panel closes.
+GetForegroundWindow
+SetForegroundWindow
+IsWindow
+// Debug-only test shortcut (DevTools/DebugHotKey.cs, removed in C-12): a global hotkey.
+RegisterHotKey
+UnregisterHotKey
+WM_HOTKEY

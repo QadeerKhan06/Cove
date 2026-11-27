@@ -37,6 +37,14 @@ public interface IPanel
     /// </summary>
     char MenuLetter { get; }
 
+    /// <summary>
+    /// Whether clicking another window closes this panel. True (the default) suits quick choices.
+    /// A panel that waits for input, such as the Files drop zone, returns false: it stays on
+    /// screen without focus, so files can be dragged in from Explorer, and closes with Esc, its
+    /// close button, or when its job starts. Added in C-06; DRAFT for K-08.
+    /// </summary>
+    bool ClosesOnOutsideClick => true;
+
     /// <summary>Creates the panel's view. Called on the UI thread each time the panel opens.</summary>
     object CreateView();
 
