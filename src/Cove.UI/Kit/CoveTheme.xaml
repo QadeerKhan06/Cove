@@ -25,9 +25,24 @@
   <sys:Double x:Key="PanelMaxHeight">420</sys:Double>
   <sys:Double x:Key="PanelCornerRadius">12</sys:Double>
 
-  <Thickness x:Key="PillPadding">16,0</Thickness>
+  <!-- A one-line pill's content: 14 px in from the left, 16 px from the right, or 4 px when it
+       ends in a button (SPEC.md alert board). -->
+  <Thickness x:Key="PillContentPadding">14,0,16,0</Thickness>
+  <Thickness x:Key="PillContentPaddingWithAction">14,0,4,0</Thickness>
   <Thickness x:Key="PanelPadding">12,4,12,12</Thickness>
   <Thickness x:Key="PillBorderThickness">1</Thickness>
+
+  <!-- Type and icons (SPEC.md §4). Each font falls back to the one Windows 10 has: Segoe UI
+       Variable and Segoe Fluent Icons ship with Windows 11 only. -->
+  <FontFamily x:Key="PillFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
+  <FontFamily x:Key="PillIconFontFamily">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+  <sys:Double x:Key="PillFontSize">13</sys:Double>
+  <sys:Double x:Key="PillIconSize">16</sys:Double>
+  <sys:Double x:Key="PillDotSize">8</sys:Double>
+
+  <!-- The alert's action button: 28 px tall with fully round ends. -->
+  <sys:Double x:Key="PillActionHeight">28</sys:Double>
+  <CornerRadius x:Key="PillActionCornerRadius">14</CornerRadius>
 
   <!-- The 8 px gap below the top edge is inside the pill window, so the pill can slide in from
        the edge while the window itself sits at the very top of the screen. -->
@@ -39,19 +54,22 @@
   <sys:Double x:Key="PillWindowHeight">452</sys:Double>
 
   <!-- Every pill surface: the theme's raised-surface fill, a hairline edge, and the theme's text
-       colour for whatever is inside it. -->
+       colour and font for whatever is inside it. -->
   <Style x:Key="PillSurfaceStyle" TargetType="kit:CapsuleBorder">
+    <!-- TODO(C-08): acrylic where it's available. Without it (Windows 10, or "Transparency
+         effects" off on Windows 11), keep this solid theme colour. -->
     <Setter Property="Background" Value="{DynamicResource SolidBackgroundFillColorQuarternaryBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
     <Setter Property="BorderThickness" Value="{StaticResource PillBorderThickness}" />
     <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+    <Setter Property="TextElement.FontFamily" Value="{StaticResource PillFontFamily}" />
   </Style>
 
-  <!-- Alert: one line with fully round ends, as wide as its content. -->
+  <!-- Alert: one line with fully round ends, as wide as its content. Its content sets its own
+       padding (PillContentPadding), since that depends on whether it ends in a button. -->
   <Style x:Key="PillAlertSurfaceStyle" TargetType="kit:CapsuleBorder" BasedOn="{StaticResource PillSurfaceStyle}">
     <Setter Property="Height" Value="{StaticResource PillHeight}" />
     <Setter Property="MaxWidth" Value="{StaticResource AlertMaxWidth}" />
-    <Setter Property="Padding" Value="{StaticResource PillPadding}" />
   </Style>
 
   <!-- Panel: a rounded rectangle that fits its content within the design's limits. -->
@@ -66,9 +84,63 @@
   <!-- Main text inside the pill. -->
   <Style x:Key="PillTextStyle" TargetType="TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+    <Setter Property="FontSize" Value="{StaticResource PillFontSize}" />
     <Setter Property="HorizontalAlignment" Value="Center" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+
+  <!-- An alert's line: fills the space between the icon and the button, trimmed with "…". -->
+  <Style x:Key="PillAlertTextStyle" TargetType="TextBlock" BasedOn="{StaticResource PillTextStyle}">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+
+  <!-- The icon at the start of a pill line, 10 px before the text (SPEC.md alert board). The
+       colour is set per alert (AlertIcons). -->
+  <Style x:Key="PillIconStyle" TargetType="TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource PillIconFontFamily}" />
+    <Setter Property="FontSize" Value="{StaticResource PillIconSize}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Margin" Value="0,0,10,0" />
+  </Style>
+
+  <!-- The filled dot ("mic live", SPEC.md §8), centred in the same 16 px space as an icon. -->
+  <Style x:Key="PillDotStyle" TargetType="Ellipse">
+    <Setter Property="Width" Value="{StaticResource PillDotSize}" />
+    <Setter Property="Height" Value="{StaticResource PillDotSize}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Margin" Value="4,0,14,0" />
+  </Style>
+
+  <!-- The alert's action (SPEC.md §7): a small round button with accent text on a subtle fill,
+       10 px after the text. The accent brush is created by WPF-UI when it applies the theme. -->
+  <Style x:Key="PillActionButtonStyle" TargetType="Button">
+    <Setter Property="Height" Value="{StaticResource PillActionHeight}" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="Margin" Value="10,0,0,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="FontSize" Value="{StaticResource PillFontSize}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="Chip"
+                  Background="{TemplateBinding Background}"
+                  CornerRadius="{StaticResource PillActionCornerRadius}"
+                  Padding="{TemplateBinding Padding}">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <!-- WinUI's subtle button gets a lighter fill while pressed. The hover look is C-08's. -->
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="Chip" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
   </Style>
 
 </ResourceDictionary>

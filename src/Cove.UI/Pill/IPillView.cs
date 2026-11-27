@@ -1,3 +1,5 @@
+using Cove.Core.Contracts;
+
 namespace Cove.UI.Pill;
 
 /// <summary>
@@ -18,11 +20,17 @@ public interface IPillView
     /// </summary>
     event EventHandler? ClickedOutside;
 
+    /// <summary>The user clicked the button on the alert that's showing.</summary>
+    event EventHandler<CoveAction>? AlertActionClicked;
+
     /// <summary>The window that has keyboard focus right now, or 0 if none.</summary>
     nint GetForegroundWindow();
 
-    /// <summary>Shows a one-line alert without taking focus.</summary>
-    void ShowAlert(string message);
+    /// <summary>
+    /// Shows an alert without taking focus: its icon, its one-line message and its first button
+    /// (the design allows one, SPEC.md §7).
+    /// </summary>
+    void ShowAlert(CoveEvent alert);
 
     /// <summary>
     /// Shows a panel's view and gives it keyboard focus. <paramref name="title"/> is the name

@@ -1,6 +1,8 @@
 ﻿using System.IO;
 using System.Windows;
+using System.Windows.Threading;
 using Cove.Core.Contracts;
+using Cove.Core.Events;
 using Cove.UI.Pill;
 using H.NotifyIcon;
 using Microsoft.Win32;
@@ -30,6 +32,8 @@ public partial class App : Application
     private TaskbarIcon? _trayIcon;
     private PillWindow? _pill;
     private PillController? _pillController;
+    private EventBus? _bus;
+    private AlertQueue? _alertQueue;
 #if DEBUG
     private DebugHotKey? _testPanelShortcut;
 #endif
@@ -69,8 +73,14 @@ public partial class App : Application
         // never a main window; the next real window (such as Settings) becomes MainWindow instead.
         MainWindow = null;
         _pillController = new PillController(_pill, CreatePanels());
+
+        // Every event handler runs on the UI thread; the alert queue turns events that carry a
+        // message into alerts on the pill. TODO(C-03): the settings store and module loader join here.
+        var uiThread = new DispatcherSynchronizationContext(Dispatcher);
+        _bus = new EventBus(uiThread);
+        _alertQueue = new AlertQueue(_bus, _pillController, uiThread);
 #if DEBUG
-        AddTestAlertMenuItem();
+        AddTestAlertsMenuItem();
         _testPanelShortcut = new DebugHotKey(
             ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift, Key.P, ToggleTestPanel);
 #endif
@@ -94,7 +104,8 @@ public partial class App : Application
         _testPanelShortcut?.Dispose();
 #endif
 
-        // Close an open panel first, so its module hears OnClosed.
+        // Stop alerts first, then close an open panel, so its module hears OnClosed.
+        _alertQueue?.Dispose();
         _pillController?.ClosePanel();
         _pill?.Close();
 
@@ -141,28 +152,40 @@ public partial class App : Application
     }
 
 #if DEBUG
-    // TODO(C-12): remove the test alert and the test panel once real alerts and the Menu show the
-    // pill. The delay leaves time to click into another app first, to check that the alert doesn't
-    // take focus when it appears (clicking the tray menu itself always does).
+    // TODO(C-12): remove the test alerts and the test panel once real modules and the Menu show the
+    // pill. The delay leaves time to click into another app first, to check that alerts don't take
+    // focus when they appear (clicking the tray menu itself always does).
+    private const string TestSource = "debug";
     private static readonly TimeSpan TestAlertDelay = TimeSpan.FromSeconds(3);
 
-    // The design's alert time (SPEC.md §5); C-07 brings the real countdown.
-    private static readonly TimeSpan TestAlertDuration = TimeSpan.FromSeconds(4);
-
-    private void AddTestAlertMenuItem()
+    private void AddTestAlertsMenuItem()
     {
-        var item = new System.Windows.Controls.MenuItem { Header = "Show test alert in 3 s" };
-        item.Click += (_, _) => RunAfter(TestAlertDelay, ShowTestAlert);
+        var item = new System.Windows.Controls.MenuItem { Header = "Show 3 test alerts in 3 s" };
+        item.Click += (_, _) => RunAfter(TestAlertDelay, PublishTestAlerts);
         _trayIcon?.ContextMenu?.Items.Insert(0, item);
         _trayIcon?.ContextMenu?.Items.Insert(1, new System.Windows.Controls.Separator());
     }
 
-    private void ShowTestAlert()
+    // C-07's done-when: three alerts in a row, and a button that runs its action. Convert opens
+    // the test panel, as a real download alert would open the Files panel.
+    private void PublishTestAlerts()
     {
-        if (_pillController?.ShowAlert("IMG_2041.heic downloaded") == true)
+        if (_bus is null)
         {
-            RunAfter(TestAlertDuration, () => _pillController.HideAlert());
+            return;
         }
+
+        var convert = new CoveAction("Convert", () =>
+        {
+            _pillController?.OpenPanel(TestPanel.PanelId);
+            return Task.CompletedTask;
+        });
+        _bus.Publish(new CoveEvent(CoveEventTypes.FileArrived, TestSource, AlertPriority.DownloadFinished, "IMG_2041.heic downloaded")
+        {
+            Actions = [convert],
+        });
+        _bus.Publish(new CoveEvent(JobEventTypes.Completed, TestSource, AlertPriority.JobCompleted, "Saved Essay.pdf"));
+        _bus.Publish(new CoveEvent(CoveEventTypes.MicStateChanged, TestSource, AlertPriority.MicInUse, "Mic on · Discord"));
     }
 
     // Ctrl+Alt+Shift+P: opens the test panel, or closes it if it's open.
@@ -185,7 +208,7 @@ public partial class App : Application
 
     private static void RunAfter(TimeSpan delay, Action action)
     {
-        var timer = new System.Windows.Threading.DispatcherTimer { Interval = delay };
+        var timer = new DispatcherTimer { Interval = delay };
         timer.Tick += (_, _) =>
         {
             timer.Stop();
